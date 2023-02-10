@@ -46,20 +46,21 @@
 (printf "(middle-square 46283 6) = ~a\n" (middle-square 46283 6))
 
 ; Problem 3
-(define (next-mersenne n)
-  (define (is-prime num test)
+(define (is-prime num)
+  (define (prime-calc num test)
     (if (> (sqrt num) test)
         (cond
           [(zero? (modulo num test)) #f]
-          [(positive? (modulo num test)) (is-prime num (+ test 1))])
+          [(positive? (modulo num test)) (prime-calc num (+ test 1))])
         #t))
-
+  (prime-calc num 2))
+(define (next-mersenne n test)
   (cond
-    [(boolean=? #t (is-prime n 2))
+    [(boolean=? #t (test n))
      (cond
-       [(boolean=? #t (is-prime (sub1 (expt 2 n)) 2)) n]
-       [(boolean=? #f (is-prime (sub1 (expt 2 n)) 2)) (next-mersenne (add1 n))])]
-    [(boolean=? #f (is-prime n 2)) (next-mersenne (add1 n))]))
+       [(boolean=? #t (test (sub1 (expt 2 n)))) n]
+       [(boolean=? #f (test (sub1 (expt 2 n)))) (next-mersenne (add1 n) test)])]
+    [(boolean=? #f (test n)) (next-mersenne (add1 n) test)]))
 
-(printf "(next-mersenne 20) = ~a\n" (next-mersenne 20))
+(printf "(next-mersenne 20 is-prime) = ~a\n" (next-mersenne 20 is-prime))
   
