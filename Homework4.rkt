@@ -48,8 +48,7 @@
 (printf "Accumulate - (remove 5 (list 1 4 2 1 6 3 5)) = ~a\n" (remove-acc 5 (list 1 4 2 1 6 3 5)))
 
 ; Problem 2
-; a
-
+(printf "\nProblem 2\n")
 ;; 1 + (2 / (3 * 5 + 1)) + (-4)
 (define expr
    (list +
@@ -62,37 +61,71 @@
          (list - 0 4)))
 expr
 ;Value: (+ 1 (/ 2 (+ (* 3 5) 1)) (- 0 4))
-
+; a
 (define (operator? item)
   (contains-acc? (list + - * /) item))
-
+; b
 (define (null-val operator)
   (if (contains-acc? (list + -) operator) 0 1))
-
+; c
+(newline)
 (define (expression? expr)
-  (if (length expr)
-      (if (operator? (car expr))
-          #t
+  (if (> (length expr) 2)
+      (if (operator? (first expr))
+          (if (accumulate
+               (lambda (x y) (or x y)) #f
+               (map (lambda (x) (operator? x)) (rest expr)))
+              #f
+              (accumulate
+               (lambda (x y) (or x y)) #f
+               (map (lambda (x)
+                     (cond
+                       [(number? x) #t]
+                       [(list? x) (expression? x)])) (rest expr))))
           #f)
       #f))
-        
 
+; d
+(define (count-operators expr)
+  (if (null? expr)
+      0
+      (cond
+        [(operator? (first expr)) (+ (count-operators (rest expr)) 1)]
+        [(number? (first expr)) (+ (count-operators (rest expr)) 0)]
+        [(list? (first expr)) (+ (count-operators (first expr)) (count-operators (rest expr)))])))
 
-;Value: (+ 1 (/ 2 (+ (* 3 5) 1)) (- 0 4))
+(define (count-primitive-operands expr)
+    (if (null? expr)
+      0
+      (cond
+        [(operator? (first expr)) (+ (count-primitive-operands (rest expr)) 0)]
+        [(number? (first expr)) (+ (count-primitive-operands (rest expr)) 1)]
+        [(list? (first expr)) (+ (count-primitive-operands (first expr)) (count-primitive-operands (rest expr)))])))
 
-(printf "(operator? (car expr)) <#t> = ~a\n" (operator? (car expr)))
+; e
+(define (evaluate expr)
+  (if (expression? expr)
+      (accumulate
+       (first expr) (null-val (first expr))
+       (map (lambda (x)
+              (cond
+                [(list? x) (evaluate x)]
+                [(number? x) x])) (rest expr)))
+      "ERROR"))
+
+(printf "(operator? (car expr)) \t\t<#t> = ~a\n" (operator? (car expr)))
 ;Value: #t 
-(printf "(number? (cadr expr)) <#t> = ~a\n" (number? (cadr expr)))
+(printf "(number? (cadr expr)) \t\t<#t> = ~a\n" (number? (cadr expr)))
 ;Value: #t
-(expression? expr) 
+(printf "(expression expr) \t\t<#t> = ~a\n" (expression? expr))
 ;Value: #t 
-(expression? (list 1 + 2)) 
+(printf "(expression (list 1 + 2)) \t<#f> = ~a\n" (expression? (list 1 + 2))) 
 ;Value: #f
-(expression? (list + 1)) 
+(printf "(expression (list + 1)) \t<#f> = ~a\n" (expression? (list + 1)))
 ;Value: #f 
-;(count-operators expr) 
+(printf "(count-operators expr) \t\t<5> = ~a\n" (count-operators expr))
 ;Value: 5
-;(count-primitive-operands expr) 
+(printf "(count-primitive-operands expr) <7> = ~a\n" (count-primitive-operands expr))
 ;Value: 7 
-;(evaluate expr) 
+(printf "(evaluate expr) \t\t<-23/8> = ~a\n" (evaluate expr))
 ;Value: -23/8
