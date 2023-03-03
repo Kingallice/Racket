@@ -68,7 +68,9 @@
        [(+ - * /) (binop (operator-conv (first sexp)) (parse (second sexp))
                  (parse (third sexp)))]
 ; modify by parsing the following into an app with multiple params
-       [(with) (printf "-> ~a" (first (second sexp)))
+       [(with) (app
+                 (parse (list 'fun (map (lambda (pair) (first pair)) (second sexp)) (third sexp)))
+                 (map (lambda (pair) (parse (second pair))) (second sexp)))
         ;(with (first (second sexp))
          ;            (parse (second (second sexp)))
           ;           (parse (third sexp)))
@@ -145,4 +147,4 @@
  (numV 77))
 
  ;; Part 5
- ;(printf "\nPart 5 Test Cases\n")
+ (printf "\nPart 5 Test Cases\n")
