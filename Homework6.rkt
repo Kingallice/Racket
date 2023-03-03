@@ -16,6 +16,7 @@
   [ num (n number?)]
   [ binop (o procedure?) (lhs FAE?) (rhs FAE?)]
   [ id (name symbol?)]
+  [ if0 (c FAE?) (t FAE?) (e FAE?) ]
   [ fun (args (listof symbol?)) (body FAE?)]
   [ app (fun-expr FAE?) (args (listof FAE?))])
 
@@ -48,6 +49,7 @@
     [ num (n) ( numV n)]
     [ binop (o l r) (numop o (interp l ds) (interp r ds))]
     [ id (v) (lookup v ds)]
+    [ if0 (c t e) (if (equal? (numV 0) (interp c ds)) (interp t ds) (interp e ds))]
     [ fun (bound-id bound-body)
           ( closureV bound-id bound-body ds)]
     [ app (fun-expr args)
@@ -70,11 +72,9 @@
 ; modify by parsing the following into an app with multiple params
        [(with) (app
                  (parse (list 'fun (map (lambda (pair) (first pair)) (second sexp)) (third sexp)))
-                 (map (lambda (pair) (parse (second pair))) (second sexp)))
-        ;(with (first (second sexp))
-         ;            (parse (second (second sexp)))
-          ;           (parse (third sexp)))
-               ]
+                 (map (lambda (pair) (parse (second pair))) (second sexp)))]
+; if0 - (if0 cond then else) if cond == 0 -> then, otherwise -> else
+       [(if0) (if0 (parse (second sexp)) (parse (third sexp)) (parse (fourth sexp)))]
 ; modify by parsing the following to handle multiple params
        [(fun) (fun 
                 (second sexp)
@@ -87,9 +87,6 @@
                (app (parse (first sexp)) (map (lambda (x) (parse x)) (rest sexp)))))
         ]
        )]))
-
-;; testing the interpreter on a function application (single param)
-;(interp (parse '{{fun {x} {+ x x}} 5}) (mtSub) )
 
 ;; sample test cases
 (printf "Sample Test Cases\n")
@@ -148,3 +145,64 @@
 
  ;; Part 5
  (printf "\nPart 5 Test Cases\n")
+ (test
+ (parse '(if0 0 1 2))
+ (if0 (num 0) (num 1) (num 2)))
+
+(test
+ (interp (parse '(if0 0 1 2)) (mtSub))
+ (numV 1))
+
+(test
+ (parse '(if0 3 1 2))
+ (if0 (num 3) (num 1) (num 2)))
+
+(test
+ (interp (parse '(if0 3 1 2)) (mtSub))
+ (numV 2))
+
+(test
+ (parse '{with {{n 0}}
+               {if0 n
+                    1
+                    2}})
+ (app (fun '(n) (if0 (id 'n) (num 1) (num 2))) (list (num 0))))
+
+(test
+ (interp
+  (parse '{with {{n 0}}
+                {if0 n
+                     1
+                     2}})
+  [mtSub])
+ (numV 1))
+
+(test
+ (parse '{{fun {w x}
+               {with {{y 5} {z 6}}
+                     (if0
+                      {- (* w y) (* x z)}
+                      {/ w y}
+                      {/ x z})}}
+          5 6})
+ (app (fun '(w x)
+           (app (fun '(y z)
+                     (if0
+                      (binop -
+                             (binop * (id 'w) (id 'y))
+                             (binop * (id 'x) (id 'z)))
+                      (binop / (id 'w) (id 'y))
+                      (binop / (id 'x) (id 'z))))
+                (list (num 5) (num 6))))
+      (list (num 5) (num 6))))
+
+(test
+ (interp (parse '{{fun {w x}
+                       {with {{y 5} {z 6}}
+                             (if0
+                              {- (* w y) (* x z)}
+                              {/ w y}
+                              {/ x z})}}
+                  5 6})
+         (mtSub))
+ (numV 1))
