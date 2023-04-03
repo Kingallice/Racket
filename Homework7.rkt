@@ -144,3 +144,70 @@
 
 ;; Part 3
 (printf "\nPart 3 - Ackermann Function\n")
+(test
+  (interp 
+    (parse '{rec {ack
+        {fun {m n}
+          {if0 m
+            {+ n 1}
+            {if0 n
+              {ack {- m 1} 1}
+              {ack {- m 1} {ack m {- n 1}}}
+            }
+          }
+        }
+      }
+      {ack 1 1}})
+    [mtSub])
+  (numV 3))
+
+(test
+  (interp 
+    (parse '{rec {ack
+        {fun {m n}
+          {if0 m
+            {+ n 1}
+            {if0 n
+              {ack {- m 1} 1}
+              {ack {- m 1} {ack m {- n 1}}}
+            }
+          }
+        }
+      }
+      {ack 2 3}})
+    [mtSub])
+  (numV 9))
+
+(test
+  (interp 
+    (parse '{rec {ack
+        {fun {m n}
+          {if0 m
+            {+ n 1}
+            {if0 n
+              {ack {- m 1} 1}
+              {ack {- m 1} {ack m {- n 1}}}
+            }
+          }
+        }
+      }
+      {ack 4 0}})
+    [mtSub])
+  (numV 13))
+
+(test
+  (interp 
+    (parse '{rec {ack
+        {fun {m n}
+          {if0 m
+            {+ n 1}
+            {if0 n
+              {ack {- m 1} 1}
+              {ack {- m 1} {ack m {- n 1}}}
+            }
+          }
+        }
+      }
+      {ack 4 1}})
+    [mtSub])
+  (numV 65533))
