@@ -74,3 +74,138 @@
 
 ;; testing the interpreter on a function application (single param)
 ;(interp (parse '{{fun {x} {+ x x}} 5}) (mtSub) )
+
+;; Part 1 Test Code
+  (test (parse '{with {b {newbox 0}}
+                    {seqn {setbox b {+ 1 {openbox b}}}
+                          {openbox b}}})
+      (app
+       (fun
+        'b
+        (seqn
+         (setbox (id 'b) (add (num 1) (openbox (id 'b))))
+         (openbox (id 'b))))
+       (newbox (num 0))))
+
+  (test (parse '{with {b {newbox 0}}
+                    {if0 {seqn {setbox b 5}
+                               {openbox b}}
+                         1
+                         {openbox b}}})
+      (app
+       (fun
+        'b
+        (if0
+         (seqn (setbox (id 'b) (num 5)) (openbox (id 'b)))
+         (num 1)
+         (openbox (id 'b))))
+       (newbox (num 0))))
+
+  (test (interp (parse '{with {b {newbox 0}}
+                            {seqn {setbox b {+ 1 {openbox b}}}
+                                  {openbox b}}})
+              (mtSub) (mtSto))
+      (vxs (numV 1) (aSto 0 (numV 1) (aSto 1 (boxV 0) (aSto 0 (numV 0) (mtSto))))))
+
+  (test (interp (parse '{with {b {newbox 0}}
+                            {if0 {seqn {setbox b 5}
+                                       {openbox b}}
+                                 1
+                                 {openbox b}}})
+              (mtSub) (mtSto))
+      (vxs (numV 5) (aSto 2 (numV 5) (aSto 3 (boxV 2) (aSto 2 (numV 0) (mtSto))))))
+
+  (test
+    (parse '{with {switch {newbox 0}}
+               {with {toggle {fun {dum}
+                                  {if0 {openbox switch}
+                                       {seqn
+                                        {setbox switch 1}
+                                        1}
+                                       {seqn
+                                        {setbox switch 0}
+                                        0}}}}
+                     {+
+                      {toggle 1729}
+                      {toggle 1729}
+                      }
+                     }})
+    (app
+     (fun
+      'switch
+      (app
+       (fun 'toggle (add (app (id 'toggle) (num 1729)) (app (id 'toggle) (num 1729))))
+       (fun 'dum (if0 (openbox (id 'switch)) (seqn (setbox (id 'switch) (num 1)) (num 1)) (seqn (setbox (id 'switch) (num 0)) (num 0))))))
+   (newbox (num 0))))
+
+  (test (interp
+       (parse '{with {switch {newbox 0}}
+                     {with {toggle {fun {dum}
+                                        {if0 {openbox switch}
+                                             {seqn
+                                              {setbox switch 1}
+                                              1}
+                                             {seqn
+                                              {setbox switch 0}
+                                              0}}}}
+                           {+
+                            {toggle 1729}
+                            {toggle 1729}
+                            }
+                           }})
+       (mtSub) (mtSto))
+      (vxs
+       (numV 1)
+       (aSto
+        4
+        (numV 0)
+        (aSto
+         8
+         (numV 1729)
+         (aSto
+          4
+          (numV 1)
+          (aSto
+           7
+           (numV 1729)
+           (aSto
+            6
+            (closureV
+             'dum
+             (if0
+              (openbox (id 'switch))
+              (seqn (setbox (id 'switch) (num 1)) (num 1))
+              (seqn (setbox (id 'switch) (num 0)) (num 0)))
+             (aSub 'switch 5 (mtSub)))
+            (aSto 5 (boxV 4) (aSto 4 (numV 0) (mtSto))))))))))
+
+;;Part 2 Test Code
+  (test (parse '{with {y 0}
+                    {seqn
+                     {seqn
+                      {setvar y {+ y 5}}
+                      {setvar y {+ y 15}}}
+                     {seqn
+                      {setvar y {+ y -3}}
+                      y}}})
+      (app
+       (fun
+        'y
+        (seqn
+         (seqn (setvar 'y (add (id 'y) (num 5))) (setvar 'y (add (id 'y) (num 15))))
+         (seqn (setvar 'y (add (id 'y) (num -3))) (id 'y))))
+       (num 0)))
+
+  (test (interp
+       (parse '{with {y 0}
+                     {seqn
+                      {seqn
+                       {setvar y {+ y 5}}
+                       {setvar y {+ y 15}}}
+                      {seqn
+                       {setvar y {+ y -3}}
+                       y}}})
+       (mtSub) (mtSto))
+      (vxs
+       (numV 17)
+       (aSto 9 (numV 17) (aSto 9 (numV 20) (aSto 9 (numV 5) (aSto 9 (numV 0) (mtSto)))))))

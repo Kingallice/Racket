@@ -72,23 +72,6 @@
                   [define arg-vals (map (lambda (arg) (interp arg ds)) args-expr)])
               (fun-val arg-vals)
               )]))
-                ;(interp fun-val (build-subs fun-val (map (lambda (arg) (interp arg ds)) args-expr) ds)))]))
-          ;(printf "\nfun-expr: ~a\nargs: ~a\nfun-val: ~a\narg-vals: ~a\n" fun-expr args (interp fun-expr ds) 0); (interp args ds)) ; (interp args ds))
-          ;((interp fun-expr ds) (interp args ds))]))
-
-          ;(local ([define fun-val (interp fun-expr ds)]
-           ;       [define arg-vals (interp args ds)]
-            ;      [define print (printf "~a" fun-val)])
-            ;(fun-val arg-vals)
-            ;)]))
-
-;    [ app (fun-expr args)
- ;         (local ([define fun-val (interp fun-expr ds)])
- ;           (interp (closureV-body fun-val)
- ;                   (build-subs (closureV-params fun-val)
-  ;                         (map (lambda (arg) (interp arg ds)) args)
-   ;                        (closureV-ds fun-val))
-    ;                  ))]))
 
 (define (parse sexp)
   (cond
@@ -111,10 +94,9 @@
                 (parse (third sexp))
                )
               ]
-       [(rec) ;(printf "Recursion")] 
+       [(rec)
           (rec (first (second sexp)) (parse (second (second sexp))) (parse (third sexp)))]
        [else
-          ;(printf "App\n\t~a\n\n" (app (parse (first sexp)) (map (lambda (x) (parse x)) (rest sexp))))
           (app (parse (first sexp)) (map (lambda (x) (parse x)) (rest sexp)))
         ]
        )]))
