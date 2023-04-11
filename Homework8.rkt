@@ -53,15 +53,11 @@
                (lookup name rest-ds))]
     ))
 
-;; num+ : numV numV âˆ’â†’ numV
-(define (numop o n1 n2)
-  (o n1 n2))
-
 ;; interp : FAE DefrdSub â†’ FAE-Value
 (define (interp expr ds)
   (type-case FAE expr
     [ num (n) n]
-    [ binop (o l r) (numop o (interp l ds) (interp r ds))]
+    [ binop (o l r) (o (interp l ds) (interp r ds))]
     [ id (v) (lookup v ds)]
     [ if0 (c t e) (if (equal? 0 (interp c ds)) (interp t ds) (interp e ds))]
     [ rec (bound-id named-expr bound-body) 
@@ -70,11 +66,29 @@
     [ fun (bound-id bound-body)
           (lambda (arg-vals) 
             (interp bound-body 
-              (aSub bound-id arg-vals ds)))]
-    [ app (fun-expr args)
+              (build-subs bound-id arg-vals ds)))]
+    [ app (fun-expr args-expr)
           (local ([define fun-val (interp fun-expr ds)]
-                  [define arg-vals (interp args ds)])
-            (fun-val arg-vals))]))
+                  [define arg-vals (map (lambda (arg) (interp arg ds)) args-expr)])
+              (fun-val arg-vals)
+              )]))
+                ;(interp fun-val (build-subs fun-val (map (lambda (arg) (interp arg ds)) args-expr) ds)))]))
+          ;(printf "\nfun-expr: ~a\nargs: ~a\nfun-val: ~a\narg-vals: ~a\n" fun-expr args (interp fun-expr ds) 0); (interp args ds)) ; (interp args ds))
+          ;((interp fun-expr ds) (interp args ds))]))
+
+          ;(local ([define fun-val (interp fun-expr ds)]
+           ;       [define arg-vals (interp args ds)]
+            ;      [define print (printf "~a" fun-val)])
+            ;(fun-val arg-vals)
+            ;)]))
+
+;    [ app (fun-expr args)
+ ;         (local ([define fun-val (interp fun-expr ds)])
+ ;           (interp (closureV-body fun-val)
+ ;                   (build-subs (closureV-params fun-val)
+  ;                         (map (lambda (arg) (interp arg ds)) args)
+   ;                        (closureV-ds fun-val))
+    ;                  ))]))
 
 (define (parse sexp)
   (cond
@@ -100,6 +114,7 @@
        [(rec) ;(printf "Recursion")] 
           (rec (first (second sexp)) (parse (second (second sexp))) (parse (third sexp)))]
        [else
+          ;(printf "App\n\t~a\n\n" (app (parse (first sexp)) (map (lambda (x) (parse x)) (rest sexp))))
           (app (parse (first sexp)) (map (lambda (x) (parse x)) (rest sexp)))
         ]
        )]))
@@ -108,8 +123,12 @@
   ;; sample test cases
   (printf "HW6 Sample Test Cases\n")
     (test
-    (interp (parse '5 ) [mtSub])
-     5 )
+      (interp (parse '5 ) [mtSub])
+      5)
+    
+    (test
+      (interp (parse '{{fun {x} {+ x x}} 5}) (mtSub))
+      10)
 
   ;; HW6 Part 1
   (printf "\nHW6 Part 1 Test Cases\n")
@@ -134,6 +153,12 @@
     (test
       (parse '{fun {x y z} {+ x x}})
       (fun '(x y z) (binop + (id 'x) (id 'x))))
+  
+  ;; HW6 Part 3
+  (printf "\nHW6 Part 3 Test Cases\n")
+    (test
+      (interp (parse '{{fun {x y z} {* {+ x y} z}} 5 6 7}) (mtSub))
+      77)
 
   ;; HW6 Part 4
   (printf "\nHW6 Part 4 Test Cases\n")
@@ -198,6 +223,17 @@
                     (list (num 5) (num 6))))
           (list (num 5) (num 6))))
 
+  (test
+    (interp (parse '{{fun {w x}
+                          {with {{y 5} {z 6}}
+                                (if0
+                                  {- (* w y) (* x z)}
+                                  {/ w y}
+                                  {/ x z})}}
+                      5 6})
+            (mtSub))
+    1)
+
   ;; HW7 Part 1
   (printf "\nHW7 Part 1 Test\n")
     (test
@@ -221,6 +257,7 @@
   ;; HW7 Part 2
   (printf "\nHW7 Part 2 Test\n")
     (test
+     (interp
       (parse '{rec {fac
                     {fun {n}
                         {if0 n
@@ -228,6 +265,7 @@
                               {* n {fac {+ n -1}}}
                               }}}
                 {fac 5}})
+      [mtSub])
      120)
 
   ;; HW7 Part 3
