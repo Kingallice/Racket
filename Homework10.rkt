@@ -1,6 +1,12 @@
 #lang plai
 
-(define-type FAE ...) ;; same except for fun which will have the argument type
+(define-type FAE  ;; same except for fun which will have the argument type
+  [ num (n number?)]
+  [ binop (o procedure?) (lhs FAE?) (rhs FAE?)]
+  [ id (name symbol?)]
+  [ if0 (c FAE?) (t FAE?) (e FAE?) ]
+  [ fun (param symbol?) (body FAE?)]
+  [ app (fun-expr FAE?) (arg-expr FAE?)]) 
 
 ;; used to bind types to identifiers
 (define-type Type
@@ -46,7 +52,7 @@
   ;(display "typecheck expr=")(display expr)(newline)
   (type-case FAE expr
     ;; return the type of a num
-    [ num (n) ...]
+    [ num (n) ()]
     ;; call type assert on a list containing the left and right parts, a numT, env, and a numT
     [ add (l r) ...]
     ;; simply do a type lookup on the identifier
@@ -64,11 +70,43 @@
             [else (type-error fn "function")])]
     ))
 
-(define-type FAE-Value ...) ;; same
-(define-type DefrdSub ...) ;; same
-(define (lookup name ds) ...) ;; same
-(define (num+ n1 n2)...) ;; same
-(define (interp expr ds) ...) ;; same
+(define-type FAE-Value
+  [ numV (n number?)]
+  [ closureV (param symbol?)
+             (body FAE?)
+             (ds DefrdSub?)])
+
+(define-type DefrdSub
+  [ mtSub ]
+  [ aSub (name symbol?) (value FAE-Value?) (ds DefrdSub?)])
+
+;; lookup : symbol DefrdSub â†’ FAE-Value
+(define (lookup name ds)
+  (type-case DefrdSub ds
+    [ mtSub () (error 'lookup "no binding for identifier" )]
+    [ aSub (bound-name bound-value rest-ds)
+           (if (symbol=? bound-name name)
+               bound-value
+               (lookup name rest-ds))]))
+
+;; num+ : numV numV âˆ’â†’ numV
+(define (num+ n1 n2)
+  ( numV (+ (numV-n n1) (numV-n n2))))
+
+;; interp : FAE DefrdSub â†’ FAE-Value
+(define (interp expr ds)
+  (type-case FAE expr
+    [ num (n) ( numV n)]
+    [ add (l r) (num+ (interp l ds) (interp r ds))]
+    [ id (v) (lookup v ds)]
+    [ fun (bound-id bound-body)
+          ( closureV bound-id bound-body ds)]
+    [ app (fun-expr arg-expr)
+          (local ([define fun-val (interp fun-expr ds)])
+            (interp (closureV-body fun-val)
+                    ( aSub (closureV-param fun-val)
+                           (interp arg-expr ds)
+                           (closureV-ds fun-val))))]))
 
 ;; parse a type expression to create either numT or recursively create arrowT's
 ;; if it's an arrowT, make sure that the syntax is a properly formed 
@@ -90,11 +128,12 @@
 ;; add an optional paramter typenv to dynamically determine the variable type in a with
 (define (parse sexp [typenv (mtTypeEnv)])
   (cond
-    [(number? sexp) ...] ;; same
-    [(symbol? sexp) ...] ;; same
+    [(number? sexp) (num sexp)]
+    [(symbol? sexp) (id sexp)]
     [(list? sexp)
      (case (first sexp)
-       [(+) ...] ;; same
+       [(+) (add (parse (second sexp))
+                 (parse (third sexp)))]
        ;; create an app from a 'with'. dynamically determine the argument/parameter type
        ;; by calling typecheck on the argument.  use this arg-type when declaring the fun
        ;; and also add a new binding onto env from the name to the arg-type and pass that in
@@ -115,7 +154,7 @@
        ;; if it's not, signal a parse error with (error 'parse-error)))
        [else ...]
        )]
-    [else ...]  ;; signal a parse error if reaching this point
+    [else (error "undefined type: " sexp)]  ;; signal a parse error if reaching this point
     ))
 
 ;!!!!!!!!!!!! these two functions are for testing:
@@ -127,175 +166,175 @@
 (test (parse '{+ 1 2}) (add (num 1) (num 2)))
 
 ;; check for erroneous forms in the parser
-;; calling (error 'parse-error) when found.
-(test/exn (parse "foo") "parse-error")
-(test/exn (parse '{foo}) "parse-error")
+      ;; calling (error 'parse-error) when found.
+      (test/exn (parse "foo") "parse-error")
+      (test/exn (parse '{foo}) "parse-error")
 
-(test (typeof '{+ 1 2}) (numT))
-(test/exn (typeof 'x) "free-variable")
+      (test (typeof '{+ 1 2}) (numT))
+      (test/exn (typeof 'x) "free-variable")
 
-(test (parse '{fun {x : number} {+ x x}})
-      (fun 'x (numT) (add (id 'x) (id 'x))))
+      (test (parse '{fun {x : number} {+ x x}})
+            (fun 'x (numT) (add (id 'x) (id 'x))))
 
-(test (typeof '{fun {x : number} {+ x x}})
+      (test (typeof '{fun {x : number} {+ x x}})
+            (arrowT (numT) (numT)))
+
+      (test (parse '{fun {x : number} {fun {y : number} x}})
+            (fun 'x (numT) (fun 'y (numT) (id 'x))))
+
+      (test (typeof '{fun {x : number} {fun {y : number} x}})
+            (arrowT (numT) (arrowT (numT) (numT))))
+
+      (test/exn (typeof '{1 2})
+            "no-type")  ;can match all or part of the exception
+
+      (test/exn (typeof '{+ {fun {x : number}  12} 2}) "no-type")
+
+      (test/exn (typeof '{{fun {f : {number -> number}}
+                              {f 1}} 1})
+            "no-type")
+
+      (test (parse '{{fun {x : number}
+                        {{fun {f : {number -> number}}
+                              {+ {f 1}
+                              {{fun {x : number}
+                                    {f 2}}
+                                    3}}}
+                        {fun {y : number} {+ x y}}}}
+                  0})
+            (app (fun 'x (numT)
+                  (app (fun 'f
+                              (arrowT (numT) (numT))
+                              (add
+                              (app (id 'f) (num 1))
+                              (app (fun 'x (numT) (app (id 'f) (num 2))) (num 3))))
+                        (fun 'y (numT) (add (id 'x) (id 'y)))))
+            (num 0)))
+
+      (test
+      (run '{{fun {x : number}
+                  {{fun {f : {number -> number}}
+                        {+ {f 1}
+                        {{fun {x : number}
+                              {f 2}}
+                        3}}}
+                  {fun {y : number} {+ x y}}}}
+            0})
+      (numV 3))
+
+      (test
+      (parse '{{fun {x : number} {+ x 12}} {+ 1 17}})
+      (app (fun 'x (numT) (add (id 'x) (num 12))) (add (num 1) (num 17))))
+
+      (test (run '{{fun {x : number} {+ x 12}} {+ 1 17}})
+            (numV 30))
+
+      (test (typeof '{{fun {x : number} {+ x 12}} {+ 1 17}})
+            (numT))
+
+      (test (parse '{{{fun {x : number}
+                        {fun {y : number}
+                              {+ x y}}}
+                  5} 6})
+            (app (app (fun 'x (numT)
+                        (fun 'y (numT)
+                              (add (id 'x) (id 'y)))) (num 5)) (num 6)))
+
+      (test
+      (run '{{{fun {x : number}
+                  {fun {y : number}
+                        {+ x y}}}
+            5} 6})
+      (numV 11))
+
+      (test
+      (parse '{with {x 5} {+ x 2} })
+      (app (fun 'x (numT) (add (id 'x) (num 2))) (num 5)))
+
+      (test (typeof '{with {x 5} {+ x 2} }) (numT))
+      (test (run '{with {x 5} {+ x 2} }) (numV 7))
+
+      (test
+      (parse '{with {f {fun {n : number} {+ n n}}}
+                  {f 2}})
+      (app
+      (fun 'f (arrowT (numT) (numT)) (app (id 'f) (num 2)))
+      (fun 'n (numT) (add (id 'n) (id 'n)))))
+
+      (test (typeof '{with {f {fun {n : number} {+ n n}}}
+                        {f 2}})
+            (numT))
+            
+      (test (run '{with {f {fun {n : number} {+ n n}}}
+                        {f 2}})
+            (numV 4))
+
+      (test (parse '{with {f {fun {n : number} {+ n n}}}
+                        {with {g {fun {h : (number -> number)} f}}
+                              {g f}}})
+            (app
+            (fun
+            'f
+            (arrowT (numT) (numT))
+            (app
+            (fun
+            'g
+            (arrowT (arrowT (numT) (numT)) (arrowT (numT) (numT)))
+            (app (id 'g) (id 'f)))
+            (fun 'h (arrowT (numT) (numT)) (id 'f))))
+            (fun 'n (numT) (add (id 'n) (id 'n)))))
+
+      (test
+      (typeof '{with {f {fun {n : number} {+ n n}}}
+                  {with {g {fun {h : (number -> number)} f}}
+                        {g f}}})
       (arrowT (numT) (numT)))
 
-(test (parse '{fun {x : number} {fun {y : number} x}})
-      (fun 'x (numT) (fun 'y (numT) (id 'x))))
-
-(test (typeof '{fun {x : number} {fun {y : number} x}})
-      (arrowT (numT) (arrowT (numT) (numT))))
-
-(test/exn (typeof '{1 2})
-          "no-type")  ;can match all or part of the exception
-
-(test/exn (typeof '{+ {fun {x : number}  12} 2}) "no-type")
-
-(test/exn (typeof '{{fun {f : {number -> number}}
-                         {f 1}} 1})
-          "no-type")
-
-(test (parse '{{fun {x : number}
-                    {{fun {f : {number -> number}}
-                          {+ {f 1}
-                             {{fun {x : number}
-                                   {f 2}}
-                              3}}}
-                     {fun {y : number} {+ x y}}}}
-               0})
-      (app (fun 'x (numT)
-                (app (fun 'f
-                          (arrowT (numT) (numT))
-                          (add
-                           (app (id 'f) (num 1))
-                           (app (fun 'x (numT) (app (id 'f) (num 2))) (num 3))))
-                     (fun 'y (numT) (add (id 'x) (id 'y)))))
-           (num 0)))
-
-(test
- (run '{{fun {x : number}
-             {{fun {f : {number -> number}}
-                   {+ {f 1}
-                      {{fun {x : number}
-                            {f 2}}
-                       3}}}
-              {fun {y : number} {+ x y}}}}
-        0})
- (numV 3))
-
-(test
- (parse '{{fun {x : number} {+ x 12}} {+ 1 17}})
- (app (fun 'x (numT) (add (id 'x) (num 12))) (add (num 1) (num 17))))
-
-(test (run '{{fun {x : number} {+ x 12}} {+ 1 17}})
-      (numV 30))
-
-(test (typeof '{{fun {x : number} {+ x 12}} {+ 1 17}})
-      (numT))
-
-(test (parse '{{{fun {x : number}
-                     {fun {y : number}
-                          {+ x y}}}
-                5} 6})
-      (app (app (fun 'x (numT)
-                     (fun 'y (numT)
-                          (add (id 'x) (id 'y)))) (num 5)) (num 6)))
-
-(test
- (run '{{{fun {x : number}
-              {fun {y : number}
-                   {+ x y}}}
-         5} 6})
- (numV 11))
-
-(test
- (parse '{with {x 5} {+ x 2} })
- (app (fun 'x (numT) (add (id 'x) (num 2))) (num 5)))
-
-(test (typeof '{with {x 5} {+ x 2} }) (numT))
-(test (run '{with {x 5} {+ x 2} }) (numV 7))
-
-(test
- (parse '{with {f {fun {n : number} {+ n n}}}
-               {f 2}})
- (app
-  (fun 'f (arrowT (numT) (numT)) (app (id 'f) (num 2)))
-  (fun 'n (numT) (add (id 'n) (id 'n)))))
-
-(test (typeof '{with {f {fun {n : number} {+ n n}}}
-                     {f 2}})
-      (numT))
-      
-(test (run '{with {f {fun {n : number} {+ n n}}}
-                  {f 2}})
-      (numV 4))
-
-(test (parse '{with {f {fun {n : number} {+ n n}}}
-                    {with {g {fun {h : (number -> number)} f}}
-                          {g f}}})
-      (app
-       (fun
-        'f
-        (arrowT (numT) (numT))
-        (app
-         (fun
-          'g
-          (arrowT (arrowT (numT) (numT)) (arrowT (numT) (numT)))
-          (app (id 'g) (id 'f)))
-         (fun 'h (arrowT (numT) (numT)) (id 'f))))
-       (fun 'n (numT) (add (id 'n) (id 'n)))))
-
-(test
- (typeof '{with {f {fun {n : number} {+ n n}}}
-                {with {g {fun {h : (number -> number)} f}}
-                      {g f}}})
- (arrowT (numT) (numT)))
-
-(test 
- (run '{with {f {fun {n : number} {+ n n}}}
-             {with {g {fun {h : (number -> number)} f}}
-                   {g f}}})
- (closureV 'n (add (id 'n) (id 'n)) (mtSub)))
+      (test 
+      (run '{with {f {fun {n : number} {+ n n}}}
+                  {with {g {fun {h : (number -> number)} f}}
+                        {g f}}})
+      (closureV 'n (add (id 'n) (id 'n)) (mtSub)))
 
 ;; extra credit tests:
-;; parser tests
-#|
-(test/exn (parse '{+ 1})
-          "wrong number of operands")
+      ;; parser tests
+      #|
+      (test/exn (parse '{+ 1})
+            "wrong number of operands")
 
-(test/exn (parse '{fun {x} x})
-          "malformed fun expression")
+      (test/exn (parse '{fun {x} x})
+            "malformed fun expression")
 
-(test/exn (parse '{fun x : number x})
-          "expected a typed formal parameter")
-             
-(test/exn (parse '{fun {x} : number x})
-          "malformed typed formal parameter")
+      (test/exn (parse '{fun x : number x})
+            "expected a typed formal parameter")
+                  
+      (test/exn (parse '{fun {x} : number x})
+            "malformed typed formal parameter")
 
-(test/exn (parse '{fun {1 : number} : number x})
-          "expected an identifier")
+      (test/exn (parse '{fun {1 : number} : number x})
+            "expected an identifier")
 
-;; parse-type tests
-(test/exn (parse '{fun {x : 1} : 1 x})
-          "expected a type expression")
-             
-(test/exn (parse '{fun {x : {number}} : number {x 1}})
-          "malformed type expression")
-             
-(test/exn (parse '{fun {x : foo} : foo x})
-          "unknown type: foo")
-             
-(test/exn (typeof 'x) "free identifier: x")
-             
-(test/exn (typeof '{+ 1 {fun {x : number} : number x}})
-          "type mismatch: operands must be numbers")
-             
-(test/exn (typeof '{fun {x : number} : (number -> number) x})
-          "type mismatch: function body has wrong type")
-             
-(test/exn (typeof '{{fun {f : (number -> number)} : number 0} 0})
-          "type mismatch: actual parameter has wrong type")
+      ;; parse-type tests
+      (test/exn (parse '{fun {x : 1} : 1 x})
+            "expected a type expression")
+                  
+      (test/exn (parse '{fun {x : {number}} : number {x 1}})
+            "malformed type expression")
+                  
+      (test/exn (parse '{fun {x : foo} : foo x})
+            "unknown type: foo")
+                  
+      (test/exn (typeof 'x) "free identifier: x")
+                  
+      (test/exn (typeof '{+ 1 {fun {x : number} : number x}})
+            "type mismatch: operands must be numbers")
+                  
+      (test/exn (typeof '{fun {x : number} : (number -> number) x})
+            "type mismatch: function body has wrong type")
+                  
+      (test/exn (typeof '{{fun {f : (number -> number)} : number 0} 0})
+            "type mismatch: actual parameter has wrong type")
 
-(test/exn (typeof (parse '{1 2}))
-          "expected a function")
-|#
+      (test/exn (typeof (parse '{1 2}))
+            "expected a function")
+      |#
