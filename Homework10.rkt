@@ -2,10 +2,9 @@
 
 (define-type FAE  ;; same except for fun which will have the argument type
   [ num (n number?)]
-  [ binop (o procedure?) (lhs FAE?) (rhs FAE?)]
+  [ add (lhs FAE?) (rhs FAE?)]
   [ id (name symbol?)]
-  [ if0 (c FAE?) (t FAE?) (e FAE?) ]
-  [ fun (param symbol?) (body FAE?)]
+  [ fun (name symbol?) (arg-type Type?) (body FAE?)]
   [ app (fun-expr FAE?) (arg-expr FAE?)]) 
 
 ;; used to bind types to identifiers
@@ -29,7 +28,10 @@
 (define (type-lookup name-to-find env)
   (type-case TypeEnv env
     [mtTypeEnv () (error 'free-variable (format "~a so no type" name-to-find))]
-    [bindType ...]))
+    [bindType (bound-name bound-type rest-env)
+            (if (symbol=? bound-name name-to-find)
+                  bound-type
+                  (type-lookup name-to-find rest-env))]))
 
 ;; Check that the types of each item in 'exprs' matches the value in 'type
 ;; according to the binding in the type environment 'typenv'
@@ -52,16 +54,16 @@
   ;(display "typecheck expr=")(display expr)(newline)
   (type-case FAE expr
     ;; return the type of a num
-    [ num (n) ()]
+    [ num (n) (numT)]
     ;; call type assert on a list containing the left and right parts, a numT, env, and a numT
-    [ add (l r) ...]
+    [ add (l r) (type-assert (list l r) (numT) env (numT))]
     ;; simply do a type lookup on the identifier
-    [ id (name) ...]
+    [ id (name) (type-lookup name env)]
     ;; return an arrowT from the argument type to the type of the body
     ;; get the type of the body by calling typecheck with the body and
     ;; and the function name and arg-type added as a binding to the binding env
     [ fun (name arg-type body)
-          (arrowT ...)]
+          (arrowT arg-type (typecheck body (bindType name arg-type env)))]
     ;; determine the result type of the app
     [ app (fn arg)
           (type-case Type (typecheck fn env)
@@ -99,7 +101,7 @@
     [ num (n) ( numV n)]
     [ add (l r) (num+ (interp l ds) (interp r ds))]
     [ id (v) (lookup v ds)]
-    [ fun (bound-id bound-body)
+    [ fun (bound-id bound-type bound-body)
           ( closureV bound-id bound-body ds)]
     [ app (fun-expr arg-expr)
           (local ([define fun-val (interp fun-expr ds)])
@@ -115,12 +117,12 @@
 (define (parse-type sexp)
   ;(display "parse-type sexp=")(display sexp)(newline)
   (case sexp
-    [(number) ...]
+    [(number) (numT)]
     [else
-     (cond ((...) ; verify that it's a proper arrow syntax
-            (arrowT ...)) ;; create a proper arrowT from the parts of the sexp, recursively calling parse-type on the parts
-           (#t
-            (error "undefined type:" sexp)))
+     (cond 
+      [(and (list? sexp)
+            (equal? 3 (length sexp))) ; verify that it's a proper arrow syntax
+            (arrowT (parse-type (first sexp)) (parse-type (third sexp)))]) ;; create a proper arrowT from the parts of the sexp, recursively calling parse-type on the parts
      ]
     ))
 
@@ -139,22 +141,27 @@
        ;; and also add a new binding onto env from the name to the arg-type and pass that in
        ;; when parsing the body of the with (so that the type of the argument is available)
        [(with)  
-        (app (fun
-              ... ; name
-              ... ; arg-type
-              (parse ... ; body
-                     (bindType ...)) ;;;binding for the name
-              )
-             ... ; argument fun is applied to
-             )
-        ]
+            (app (fun
+                  (first (second sexp)) ; name
+                  (typecheck (parse (second (second sexp))) typenv) ; arg-type
+                  (parse (third sexp) ; body
+                        (bindType (first (second sexp)) (typecheck (parse (second (second sexp))) typenv) typenv))) ;;;binding for the name
+                  (parse (second (second sexp)) typenv) ; argument fun is applied to
+             )]
        ;; modify fun to include the argument type (use parse-type)
-       [(fun) ...]
+       [(fun) (fun
+            (first (second sexp))
+            (parse-type (third (second sexp)))
+            (parse (third sexp)))]
        ;; this this point, the else will verify that this is a proper app (with two elements in a list
        ;; if it's not, signal a parse error with (error 'parse-error)))
-       [else ...]
+       [else 
+            (cond
+            [(and (list? sexp)
+                  (equal? 2 (length sexp))) (app (parse (first sexp)) (parse (second sexp)))]
+            [else (error "parse-error: " sexp)])]
        )]
-    [else (error "undefined type: " sexp)]  ;; signal a parse error if reaching this point
+    [else (error "parse-error: " sexp)]  ;; signal a parse error if reaching this point
     ))
 
 ;!!!!!!!!!!!! these two functions are for testing:
@@ -162,10 +169,13 @@
 (define (typeof sexp) (type-of (parse sexp)))
 
 ;; general tests
+(printf "General Tests\n")
 (test (run '5 ) (numV 5) )
 (test (parse '{+ 1 2}) (add (num 1) (num 2)))
 
+
 ;; check for erroneous forms in the parser
+      (printf "Check for Erroneous Tests\n")
       ;; calling (error 'parse-error) when found.
       (test/exn (parse "foo") "parse-error")
       (test/exn (parse '{foo}) "parse-error")
@@ -299,6 +309,8 @@
 ;; extra credit tests:
       ;; parser tests
       #|
+      (printf "Extra Credit Tests\n")
+      
       (test/exn (parse '{+ 1})
             "wrong number of operands")
 
