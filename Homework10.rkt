@@ -1,5 +1,11 @@
 #lang plai
 
+(define (contains? lst object)
+  (if (empty? lst)
+      #f
+     (if (equal? object (car lst)) #t
+         (contains? (rest lst) object))))
+
 (define-type FAE  ;; same except for fun which will have the argument type
   [ num (n number?)]
   [ add (lhs FAE?) (rhs FAE?)]
@@ -134,8 +140,10 @@
     [(symbol? sexp) (id sexp)]
     [(list? sexp)
      (case (first sexp)
-       [(+) (add (parse (second sexp))
-                 (parse (third sexp)))]
+       [(+) (if (equal? 3 (length sexp))
+                  (add (parse (second sexp))
+                        (parse (third sexp)))
+                  (error "wrong number of operands: " sexp))]
        ;; create an app from a 'with'. dynamically determine the argument/parameter type
        ;; by calling typecheck on the argument.  use this arg-type when declaring the fun
        ;; and also add a new binding onto env from the name to the arg-type and pass that in
@@ -149,10 +157,11 @@
                   (parse (second (second sexp)) typenv) ; argument fun is applied to
              )]
        ;; modify fun to include the argument type (use parse-type)
-       [(fun) (fun
-            (first (second sexp))
-            (parse-type (third (second sexp)))
-            (parse (third sexp)))]
+       [(fun) 
+            (fun
+                  (first (second sexp))
+                  (parse-type (third (second sexp)))
+                  (parse (third sexp)))]
        ;; this this point, the else will verify that this is a proper app (with two elements in a list
        ;; if it's not, signal a parse error with (error 'parse-error)))
        [else 
